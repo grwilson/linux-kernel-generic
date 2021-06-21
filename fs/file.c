@@ -711,9 +711,11 @@ static struct file *__fget(unsigned int fd, fmode_t mask, unsigned int refs)
 {
 	struct files_struct *files = current->files;
 	struct file *file;
+	int64_t cnt = 0;
 
 	rcu_read_lock();
 loop:
+	cnt++;
 	file = fcheck_files(files, fd);
 	if (file) {
 		/* File object ref couldn't be taken.
@@ -722,8 +724,11 @@ loop:
 		 */
 		if (file->f_mode & mask)
 			file = NULL;
-		else if (!get_file_rcu_many(file, refs))
+		else if (!get_file_rcu_many(file, refs)) {
+			if (cnt > 1000000)
+				printk(KERN_WARNING "__fget loop: file %px, fd %d\n", file, fd);
 			goto loop;
+		}
 	}
 	rcu_read_unlock();
 
